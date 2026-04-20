@@ -5,7 +5,16 @@ require("dotenv").config();
 const app = express();
 app.use(express.json());
 
+// 🔥 LOG ALLES
+app.use((req, res, next) => {
+    console.log("REQUEST:", req.method, req.url);
+    next();
+});
+
 app.post("/send-reset-email", async (req, res) => {
+    console.log("RESET ROUTE HIT!");
+    console.log("BODY:", req.body);
+
     const { email } = req.body;
 
     try {
@@ -16,14 +25,10 @@ app.post("/send-reset-email", async (req, res) => {
                     name: "Siege of Sanctum",
                     email: process.env.SENDER_EMAIL
                 },
-                to: [
-                    {
-                        email: email
-                    }
-                ],
+                to: [{ email }],
                 subject: "Passwort zurücksetzen",
-                htmlContent: `<p>Klicke hier um dein Passwort zurückzusetzen:</p>
-                              <a href="https://dein-link-hier.com">Passwort zurücksetzen</a>`
+                htmlContent: `<p>Klicke hier:</p>
+                              <a href="https://dein-link-hier.com">Reset</a>`
             },
             {
                 headers: {
@@ -33,10 +38,11 @@ app.post("/send-reset-email", async (req, res) => {
             }
         );
 
-        res.send("Email sent!");
-    } catch (error) {
-        console.error(error.response?.data || error.message);
-        res.status(500).send("Error sending email");
+        console.log("EMAIL SENT!");
+        res.send("OK");
+    } catch (err) {
+        console.error("ERROR:", err.response?.data || err.message);
+        res.status(500).send("ERROR");
     }
 });
 
