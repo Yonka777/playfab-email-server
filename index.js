@@ -55,9 +55,21 @@ app.get("/reset-password", (req, res) => {
             <meta charset="UTF-8" />
             <title>Passwort zurücksetzen</title>
             <style>
-                body { font-family: Arial, sans-serif; max-width: 420px; margin: 40px auto; padding: 20px; }
-                input, button { width: 100%; padding: 12px; margin-top: 12px; box-sizing: border-box; }
-                .msg { margin-top: 16px; }
+                body {
+                    font-family: Arial, sans-serif;
+                    max-width: 420px;
+                    margin: 40px auto;
+                    padding: 20px;
+                }
+                input, button {
+                    width: 100%;
+                    padding: 12px;
+                    margin-top: 12px;
+                    box-sizing: border-box;
+                }
+                .msg {
+                    margin-top: 16px;
+                }
             </style>
         </head>
         <body>
@@ -137,6 +149,80 @@ app.post("/api/reset-password", async (req, res) => {
         console.error("RESET PASSWORD ERROR:", err.response?.data || err.message);
         res.status(500).send("Passwort konnte nicht geändert werden.");
     }
+});
+
+app.get("/email-verified", (req, res) => {
+    res.send(`
+        <html>
+        <head>
+            <meta charset="UTF-8" />
+            <title>E-Mail bestätigt</title>
+            <style>
+                body {
+                    font-family: Arial, sans-serif;
+                    max-width: 520px;
+                    margin: 60px auto;
+                    padding: 24px;
+                    text-align: center;
+                    line-height: 1.5;
+                }
+                h1 {
+                    color: #1f8b24;
+                }
+                .box {
+                    border: 1px solid #ddd;
+                    border-radius: 12px;
+                    padding: 24px;
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+                }
+            </style>
+        </head>
+        <body>
+            <div class="box">
+                <h1>E-Mail erfolgreich bestätigt</h1>
+                <p>Deine E-Mail-Adresse wurde erfolgreich verifiziert.</p>
+                <p>Du kannst jetzt zurück ins Spiel wechseln.</p>
+            </div>
+        </body>
+        </html>
+    `);
+});
+
+app.get("/email-error", (req, res) => {
+    res.send(`
+        <html>
+        <head>
+            <meta charset="UTF-8" />
+            <title>Bestätigung fehlgeschlagen</title>
+            <style>
+                body {
+                    font-family: Arial, sans-serif;
+                    max-width: 520px;
+                    margin: 60px auto;
+                    padding: 24px;
+                    text-align: center;
+                    line-height: 1.5;
+                }
+                h1 {
+                    color: #c62828;
+                }
+                .box {
+                    border: 1px solid #ddd;
+                    border-radius: 12px;
+                    padding: 24px;
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+                }
+            </style>
+        </head>
+        <body>
+            <div class="box">
+                <h1>Bestätigung fehlgeschlagen</h1>
+                <p>Die E-Mail konnte nicht bestätigt werden oder der Link ist ungültig.</p>
+                <p>Bitte fordere im Spiel eine neue Bestätigungs-Mail an.</p>
+            </div>
+        </body>
+        </html>
+    `);
 });
 
 const PORT = process.env.PORT || 3000;
