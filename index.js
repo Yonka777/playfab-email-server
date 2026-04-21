@@ -310,37 +310,36 @@ function normalizeVerificationValue(value) {
 }
 
 function extractVerificationStatus(accountInfo) {
-    // Wir prüfen mehrere mögliche Felder robust durch,
-    // weil die PlayFab-Rückgabe je nach Account-Typ variieren kann.
-
     const candidates = [
-        accountInfo?.TitleInfo?.VerificationStatus,
+        accountInfo?.TitleInfo?.Origination,
         accountInfo?.PrivateInfo?.VerificationStatus,
-        accountInfo?.UserPrivateAccountInfo?.VerificationStatus,
         accountInfo?.ContactEmailAddresses?.[0]?.VerificationStatus,
+        accountInfo?.UserPrivateAccountInfo?.VerificationStatus,
         accountInfo?.EmailVerificationStatus
     ];
 
     for (const value of candidates) {
         if (value !== undefined && value !== null) {
-            return {
-                raw: value,
-                verified: normalizeVerificationValue(value)
-            };
+            const asString = String(value).toLowerCase();
+
+            if (
+                asString === "confirmed" ||
+                asString === "verified" ||
+                asString === "true"
+            ) {
+                return { raw: value, verified: true };
+            }
         }
     }
 
-    return {
-        raw: null,
-        verified: false
-    };
+    return { raw: null, verified: false };
 }
 
 function extractEmail(accountInfo) {
     return (
         accountInfo?.PrivateInfo?.Email ||
         accountInfo?.UserPrivateAccountInfo?.Email ||
-        accountInfo?.ContactEmailAddresses?.[0]?.EmailAddress ||
+        accountInfo?.TitleInfo?.DisplayName ||
         null
     );
 }
@@ -379,7 +378,7 @@ app.post("/check-email-verification", async (req, res) => {
             }
         );
 
-        const accountInfo = response.data?.data?.UserAccountInfo || null;
+        const accountInfo = response.data?.data?.UserInfo || null;
         const extractedEmail = extractEmail(accountInfo);
         const verification = extractVerificationStatus(accountInfo);
 
