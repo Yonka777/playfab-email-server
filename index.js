@@ -151,41 +151,114 @@ app.post("/api/reset-password", async (req, res) => {
     }
 });
 
-app.get("/email-verified", (req, res) => {
-    res.send(`
-        <html>
-        <head>
-            <meta charset="UTF-8" />
-            <title>E-Mail bestätigt</title>
-            <style>
-                body {
-                    font-family: Arial, sans-serif;
-                    max-width: 520px;
-                    margin: 60px auto;
-                    padding: 24px;
-                    text-align: center;
-                    line-height: 1.5;
+app.get("/email-verified", async (req, res) => {
+    const token =
+        req.query.token ||
+        req.query.Token ||
+        req.query.t ||
+        "";
+
+    if (!token) {
+        return res.status(400).send(`
+            <html>
+            <head>
+                <meta charset="UTF-8" />
+                <title>Bestätigung fehlgeschlagen</title>
+            </head>
+            <body style="font-family: Arial, sans-serif; max-width: 520px; margin: 60px auto; padding: 24px; text-align: center;">
+                <h1 style="color:#c62828;">Bestätigung fehlgeschlagen</h1>
+                <p>Es wurde kein Token in der URL gefunden.</p>
+            </body>
+            </html>
+        `);
+    }
+
+    try {
+        const url = `https://${process.env.PLAYFAB_TITLE_ID}.playfabapi.com/Server/ConfirmContactEmail`;
+
+        const response = await axios.post(
+            url,
+            {
+                Token: token
+            },
+            {
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-SecretKey": process.env.PLAYFAB_SECRET_KEY
                 }
-                h1 {
-                    color: #1f8b24;
-                }
-                .box {
-                    border: 1px solid #ddd;
-                    border-radius: 12px;
-                    padding: 24px;
-                    box-shadow: 0 2px 10px rgba(0,0,0,0.06);
-                }
-            </style>
-        </head>
-        <body>
-            <div class="box">
-                <h1>E-Mail erfolgreich bestätigt</h1>
-                <p>Deine E-Mail-Adresse wurde erfolgreich verifiziert.</p>
-                <p>Du kannst jetzt zurück ins Spiel wechseln.</p>
-            </div>
-        </body>
-        </html>
-    `);
+            }
+        );
+
+        console.log("EMAIL CONFIRM SUCCESS:", response.data);
+
+        return res.send(`
+            <html>
+            <head>
+                <meta charset="UTF-8" />
+                <title>E-Mail bestätigt</title>
+                <style>
+                    body {
+                        font-family: Arial, sans-serif;
+                        max-width: 520px;
+                        margin: 60px auto;
+                        padding: 24px;
+                        text-align: center;
+                        line-height: 1.5;
+                    }
+                    h1 { color: #1f8b24; }
+                    .box {
+                        border: 1px solid #ddd;
+                        border-radius: 12px;
+                        padding: 24px;
+                        box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="box">
+                    <h1>E-Mail erfolgreich bestätigt</h1>
+                    <p>Deine E-Mail-Adresse wurde erfolgreich verifiziert.</p>
+                    <p>Du kannst jetzt zurück ins Spiel wechseln.</p>
+                </div>
+            </body>
+            </html>
+        `);
+    } catch (err) {
+        console.error("EMAIL CONFIRM ERROR:", err.response?.data || err.message);
+
+        return res.status(500).send(`
+            <html>
+            <head>
+                <meta charset="UTF-8" />
+                <title>Bestätigung fehlgeschlagen</title>
+                <style>
+                    body {
+                        font-family: Arial, sans-serif;
+                        max-width: 520px;
+                        margin: 60px auto;
+                        padding: 24px;
+                        text-align: center;
+                        line-height: 1.5;
+                    }
+                    h1 { color: #c62828; }
+                    .box {
+                        border: 1px solid #ddd;
+                        border-radius: 12px;
+                        padding: 24px;
+                        box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="box">
+                    <h1>Bestätigung fehlgeschlagen</h1>
+                    <p>Der Link war ungültig oder ist abgelaufen.</p>
+                    <p>Bitte fordere im Spiel eine neue Bestätigungs-Mail an.</p>
+                </div>
+            </body>
+            </html>
+        `);
+    }
 });
 
 app.get("/email-error", (req, res) => {
@@ -203,9 +276,7 @@ app.get("/email-error", (req, res) => {
                     text-align: center;
                     line-height: 1.5;
                 }
-                h1 {
-                    color: #c62828;
-                }
+                h1 { color: #c62828; }
                 .box {
                     border: 1px solid #ddd;
                     border-radius: 12px;
@@ -217,12 +288,119 @@ app.get("/email-error", (req, res) => {
         <body>
             <div class="box">
                 <h1>Bestätigung fehlgeschlagen</h1>
-                <p>Die E-Mail konnte nicht bestätigt werden oder der Link ist ungültig.</p>
+                <p>Die E-Mail konnte nicht bestätigt werden.</p>
                 <p>Bitte fordere im Spiel eine neue Bestätigungs-Mail an.</p>
             </div>
         </body>
         </html>
     `);
+});
+
+// ----------------------------------------------------
+// HILFSFUNKTIONEN FÜR VERIFIKATIONS-STATUS
+// ----------------------------------------------------
+
+function normalizeVerificationValue(value) {
+    if (value === true) return true;
+    if (typeof value === "string") {
+        const v = value.toLowerCase();
+        return v === "confirmed" || v === "verified" || v === "true";
+    }
+    return false;
+}
+
+function extractVerificationStatus(accountInfo) {
+    // Wir prüfen mehrere mögliche Felder robust durch,
+    // weil die PlayFab-Rückgabe je nach Account-Typ variieren kann.
+
+    const candidates = [
+        accountInfo?.TitleInfo?.VerificationStatus,
+        accountInfo?.PrivateInfo?.VerificationStatus,
+        accountInfo?.UserPrivateAccountInfo?.VerificationStatus,
+        accountInfo?.ContactEmailAddresses?.[0]?.VerificationStatus,
+        accountInfo?.EmailVerificationStatus
+    ];
+
+    for (const value of candidates) {
+        if (value !== undefined && value !== null) {
+            return {
+                raw: value,
+                verified: normalizeVerificationValue(value)
+            };
+        }
+    }
+
+    return {
+        raw: null,
+        verified: false
+    };
+}
+
+function extractEmail(accountInfo) {
+    return (
+        accountInfo?.PrivateInfo?.Email ||
+        accountInfo?.UserPrivateAccountInfo?.Email ||
+        accountInfo?.ContactEmailAddresses?.[0]?.EmailAddress ||
+        null
+    );
+}
+
+// ----------------------------------------------------
+// NEUER ENDPOINT: VERIFIKATIONSSTATUS SERVERSEITIG PRÜFEN
+// ----------------------------------------------------
+
+app.post("/check-email-verification", async (req, res) => {
+    const { playFabId, email, username } = req.body || {};
+
+    if (!playFabId && !email && !username) {
+        return res.status(400).json({
+            success: false,
+            message: "playFabId, email oder username fehlt"
+        });
+    }
+
+    try {
+        const url = `https://${process.env.PLAYFAB_TITLE_ID}.playfabapi.com/Admin/GetUserAccountInfo`;
+
+        const body = {};
+
+        if (playFabId) body.PlayFabId = playFabId;
+        else if (email) body.Email = email;
+        else if (username) body.Username = username;
+
+        const response = await axios.post(
+            url,
+            body,
+            {
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-SecretKey": process.env.PLAYFAB_SECRET_KEY
+                }
+            }
+        );
+
+        const accountInfo = response.data?.data?.UserAccountInfo || null;
+        const extractedEmail = extractEmail(accountInfo);
+        const verification = extractVerificationStatus(accountInfo);
+
+        console.log("CHECK EMAIL VERIFICATION RESPONSE:", JSON.stringify(response.data, null, 2));
+
+        return res.json({
+            success: true,
+            linked: !!extractedEmail,
+            email: extractedEmail,
+            verified: verification.verified,
+            verificationRaw: verification.raw
+        });
+    } catch (err) {
+        console.error("CHECK EMAIL VERIFICATION ERROR:", err.response?.data || err.message);
+
+        return res.status(500).json({
+            success: false,
+            message: "Verifikationsstatus konnte nicht abgefragt werden",
+            error: err.response?.data || err.message
+        });
+    }
 });
 
 const PORT = process.env.PORT || 3000;
