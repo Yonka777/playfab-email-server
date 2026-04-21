@@ -378,18 +378,33 @@ app.post("/check-email-verification", async (req, res) => {
             }
         );
 
-        const accountInfo = response.data?.data?.UserInfo || null;
-        const extractedEmail = extractEmail(accountInfo);
-        const verification = extractVerificationStatus(accountInfo);
+        console.log("CHECK EMAIL VERIFICATION RAW RESPONSE:", JSON.stringify(response.data, null, 2));
 
-        console.log("CHECK EMAIL VERIFICATION RESPONSE:", JSON.stringify(response.data, null, 2));
+        const accountInfo = response.data?.data?.UserInfo || null;
+
+        const extractedEmail =
+            accountInfo?.PrivateInfo?.Email ||
+            accountInfo?.UserPrivateAccountInfo?.Email ||
+            null;
+
+        const verificationRaw =
+            accountInfo?.PrivateInfo?.VerificationStatus ??
+            accountInfo?.ContactEmailAddresses?.[0]?.VerificationStatus ??
+            accountInfo?.UserPrivateAccountInfo?.VerificationStatus ??
+            accountInfo?.EmailVerificationStatus ??
+            null;
+
+        const verified =
+            String(verificationRaw).toLowerCase() === "confirmed" ||
+            String(verificationRaw).toLowerCase() === "verified" ||
+            verificationRaw === true;
 
         return res.json({
             success: true,
             linked: !!extractedEmail,
             email: extractedEmail,
-            verified: verification.verified,
-            verificationRaw: verification.raw
+            verified: verified,
+            verificationRaw: verificationRaw
         });
     } catch (err) {
         console.error("CHECK EMAIL VERIFICATION ERROR:", err.response?.data || err.message);
