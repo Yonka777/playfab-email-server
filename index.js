@@ -359,17 +359,54 @@ app.post("/check-email-verification", async (req, res) => {
     }
 
     try {
-        const url = `https://${process.env.PLAYFAB_TITLE_ID}.playfabapi.com/Admin/GetUserAccountInfo`;
+        let resolvedPlayFabId = playFabId;
 
-        const body = {};
+        // Falls keine PlayFabId mitgeschickt wurde, zuerst über GetUserAccountInfo auflösen
+        if (!resolvedPlayFabId) {
+            const lookupUrl = `https://${process.env.PLAYFAB_TITLE_ID}.playfabapi.com/Admin/GetUserAccountInfo`;
+            const lookupBody = {};
 
-        if (playFabId) body.PlayFabId = playFabId;
-        else if (email) body.Email = email;
-        else if (username) body.Username = username;
+            if (email) lookupBody.Email = email;
+            else if (username) lookupBody.Username = username;
 
-        const response = await axios.post(
-            url,
-            body,
+            const lookupResponse = await axios.post(
+                lookupUrl,
+                lookupBody,
+                {
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-SecretKey": process.env.PLAYFAB_SECRET_KEY
+                    }
+                }
+            );
+
+            console.log("LOOKUP USER RESPONSE:", JSON.stringify(lookupResponse.data, null, 2));
+
+            resolvedPlayFabId = lookupResponse.data?.data?.UserInfo?.PlayFabId || null;
+        }
+
+        if (!resolvedPlayFabId) {
+            return res.json({
+                success: true,
+                linked: false,
+                email: null,
+                verified: false,
+                verificationRaw: null
+            });
+        }
+
+        // Jetzt echten Profilstatus holen
+        const profileUrl = `https://${process.env.PLAYFAB_TITLE_ID}.playfabapi.com/Admin/GetPlayerProfile`;
+
+        const profileResponse = await axios.post(
+            profileUrl,
+            {
+                PlayFabId: resolvedPlayFabId,
+                ProfileConstraints: {
+                    ShowContactEmailAddresses: true,
+                    ShowDisplayName: true
+                }
+            },
             {
                 headers: {
                     "Content-Type": "application/json",
@@ -378,21 +415,13 @@ app.post("/check-email-verification", async (req, res) => {
             }
         );
 
-        console.log("CHECK EMAIL VERIFICATION RAW RESPONSE:", JSON.stringify(response.data, null, 2));
+        console.log("GET PLAYER PROFILE RESPONSE:", JSON.stringify(profileResponse.data, null, 2));
 
-        const accountInfo = response.data?.data?.UserInfo || null;
+        const profile = profileResponse.data?.data?.PlayerProfile || null;
+        const contact = profile?.ContactEmailAddresses?.[0] || null;
 
-        const extractedEmail =
-            accountInfo?.PrivateInfo?.Email ||
-            accountInfo?.UserPrivateAccountInfo?.Email ||
-            null;
-
-        const verificationRaw =
-            accountInfo?.PrivateInfo?.VerificationStatus ??
-            accountInfo?.ContactEmailAddresses?.[0]?.VerificationStatus ??
-            accountInfo?.UserPrivateAccountInfo?.VerificationStatus ??
-            accountInfo?.EmailVerificationStatus ??
-            null;
+        const extractedEmail = contact?.EmailAddress || email || null;
+        const verificationRaw = contact?.VerificationStatus ?? null;
 
         const verified =
             String(verificationRaw).toLowerCase() === "confirmed" ||
